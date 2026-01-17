@@ -1,0 +1,52 @@
+name: Deploy (repository_dispatch)
+
+on:
+  repository_dispatch:
+    types: [deploy]
+
+concurrency:
+  group: deploy-game
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -euo pipefail
+
+            SERVICE="${{ github.event.client_payload.service }}"
+            IMAGE="${{ github.event.client_payload.image }}"
+
+            cd "${{ secrets.DEPLOY_PATH }}"
+
+            if [ "$SERVICE" = "frontend" ]; then
+              if grep -q '^FRONT_IMAGE=' .env; then
+                sed -i "s|^FRONT_IMAGE=.*|FRONT_IMAGE=$IMAGE|" .env
+              else
+                echo "FRONT_IMAGE=$IMAGE" >> .env
+              fi
+              docker compose pull sveltekit
+              docker compose up -d --no-deps sveltekit
+
+            elif [ "$SERVICE" = "backend" ]; then
+              if grep -q '^BACK_IMAGE=' .env; then
+                sed -i "s|^BACK_IMAGE=.*|BACK_IMAGE=$IMAGE|" .env
+              else
+                echo "BACK_IMAGE=$IMAGE" >> .env
+              fi
+              docker compose pull api
+              docker compose up -d --no-deps api
+            else
+              echo "Unknown service: $SERVICE"
+              exit 1
+            fi
+
+            docker image prune -f || true
