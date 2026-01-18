@@ -19,34 +19,71 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
+          script_stop: true
           script: |
             set -euo pipefail
 
             SERVICE="${{ github.event.client_payload.service }}"
             IMAGE="${{ github.event.client_payload.image }}"
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
 
-            cd "${{ secrets.DEPLOY_PATH }}"
+            echo "[deploy] service=${SERVICE}"
+            echo "[deploy] image=${IMAGE}"
+            echo "[deploy] user=$(whoami) host=$(hostname) pwd=$(pwd) home=${HOME}"
 
-            if [ "$SERVICE" = "frontend" ]; then
-              if grep -q '^FRONT_IMAGE=' .env; then
-                sed -i "s|^FRONT_IMAGE=.*|FRONT_IMAGE=$IMAGE|" .env
-              else
-                echo "FRONT_IMAGE=$IMAGE" >> .env
-              fi
-              docker compose pull sveltekit
-              docker compose up -d --no-deps sveltekit
-
-            elif [ "$SERVICE" = "backend" ]; then
-              if grep -q '^BACK_IMAGE=' .env; then
-                sed -i "s|^BACK_IMAGE=.*|BACK_IMAGE=$IMAGE|" .env
-              else
-                echo "BACK_IMAGE=$IMAGE" >> .env
-              fi
-              docker compose pull api
-              docker compose up -d --no-deps api
-            else
-              echo "Unknown service: $SERVICE"
+            if [ -z "${SERVICE}" ] || [ -z "${IMAGE}" ]; then
+              echo "[deploy] Missing client_payload: service or image"
               exit 1
             fi
 
+            if [ ! -d "${DEPLOY_PATH}" ]; then
+              echo "[deploy] DEPLOY_PATH is not a directory (or does not exist)."
+              echo "[deploy] Check secrets.DEPLOY_PATH"
+              exit 1
+            fi
+
+            cd "${DEPLOY_PATH}"
+            echo "[deploy] working_dir=$(pwd)"
+            ls -la
+
+            # Force compose project name to match existing containers: game-*
+            export COMPOSE_PROJECT_NAME="game"
+
+            # Prevent "wrong image for service" accidents
+            case "${SERVICE}" in
+              frontend)
+                echo "${IMAGE}" | grep -q "/svelteweb:" || { echo "[deploy] Image mismatch for frontend: ${IMAGE}"; exit 1; }
+                ;;
+              backend)
+                echo "${IMAGE}" | grep -q "/gameserver:" || { echo "[deploy] Image mismatch for backend: ${IMAGE}"; exit 1; }
+                ;;
+              *)
+                echo "[deploy] Unknown service: ${SERVICE}"
+                exit 1
+                ;;
+            esac
+
+            # Update .env images
+            if [ "${SERVICE}" = "frontend" ]; then
+              if grep -q '^FRONT_IMAGE=' .env; then
+                sed -i "s|^FRONT_IMAGE=.*|FRONT_IMAGE=${IMAGE}|" .env
+              else
+                echo "FRONT_IMAGE=${IMAGE}" >> .env
+              fi
+
+              docker compose pull sveltekit
+              docker compose up -d --no-deps sveltekit
+
+            elif [ "${SERVICE}" = "backend" ]; then
+              if grep -q '^BACK_IMAGE=' .env; then
+                sed -i "s|^BACK_IMAGE=.*|BACK_IMAGE=${IMAGE}|" .env
+              else
+                echo "BACK_IMAGE=${IMAGE}" >> .env
+              fi
+
+              docker compose pull api
+              docker compose up -d --no-deps api
+            fi
+
+            docker compose ps
             docker image prune -f || true
