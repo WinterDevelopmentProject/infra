@@ -29,7 +29,7 @@ jobs:
 
             echo "[deploy] service=${SERVICE}"
             echo "[deploy] image=${IMAGE}"
-            echo "[deploy] user=$(whoami) host=$(hostname) pwd=$(pwd) home=${HOME}"
+            echo "[deploy] user=$(whoami) host=$(hostname) home=${HOME}"
 
             if [ -z "${SERVICE}" ] || [ -z "${IMAGE}" ]; then
               echo "[deploy] Missing client_payload: service or image"
@@ -50,20 +50,16 @@ jobs:
             export COMPOSE_PROJECT_NAME="game"
 
             # Prevent "wrong image for service" accidents
-            case "${SERVICE}" in
-              frontend)
-                echo "${IMAGE}" | grep -q "/svelteweb:" || { echo "[deploy] Image mismatch for frontend: ${IMAGE}"; exit 1; }
-                ;;
-              backend)
-                echo "${IMAGE}" | grep -q "/gameserver:" || { echo "[deploy] Image mismatch for backend: ${IMAGE}"; exit 1; }
-                ;;
-              *)
-                echo "[deploy] Unknown service: ${SERVICE}"
-                exit 1
-                ;;
-            esac
+            if [ "${SERVICE}" = "frontend" ]; then
+              echo "${IMAGE}" | grep -q "/svelteweb:" || { echo "[deploy] Image mismatch for frontend: ${IMAGE}"; exit 1; }
+            elif [ "${SERVICE}" = "backend" ]; then
+              echo "${IMAGE}" | grep -q "/gameserver:" || { echo "[deploy] Image mismatch for backend: ${IMAGE}"; exit 1; }
+            else
+              echo "[deploy] Unknown service: ${SERVICE}"
+              exit 1
+            fi
 
-            # Update .env images
+            # Update .env images + deploy
             if [ "${SERVICE}" = "frontend" ]; then
               if grep -q '^FRONT_IMAGE=' .env; then
                 sed -i "s|^FRONT_IMAGE=.*|FRONT_IMAGE=${IMAGE}|" .env
@@ -74,7 +70,7 @@ jobs:
               docker compose pull sveltekit
               docker compose up -d --no-deps sveltekit
 
-            elif [ "${SERVICE}" = "backend" ]; then
+            else
               if grep -q '^BACK_IMAGE=' .env; then
                 sed -i "s|^BACK_IMAGE=.*|BACK_IMAGE=${IMAGE}|" .env
               else
