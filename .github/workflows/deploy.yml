@@ -22,6 +22,7 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            set -x
 
             SERVICE="${{ github.event.client_payload.service }}"
             IMAGE="${{ github.event.client_payload.image }}"
@@ -31,55 +32,55 @@ jobs:
             echo "[deploy] image=${IMAGE}"
             echo "[deploy] user=$(whoami) host=$(hostname) home=${HOME}"
 
-            if [ -z "${SERVICE}" ] || [ -z "${IMAGE}" ]; then
-              echo "[deploy] Missing client_payload: service or image"
-              exit 1
-            fi
+            [ -n "${SERVICE}" ] && [ -n "${IMAGE}" ]
 
-            if [ ! -d "${DEPLOY_PATH}" ]; then
-              echo "[deploy] DEPLOY_PATH is not a directory (or does not exist)."
-              echo "[deploy] Check secrets.DEPLOY_PATH"
-              exit 1
-            fi
-
+            [ -d "${DEPLOY_PATH}" ]
             cd "${DEPLOY_PATH}"
             echo "[deploy] working_dir=$(pwd)"
             ls -la
 
-            # Force compose project name to match existing containers: game-*
             export COMPOSE_PROJECT_NAME="game"
 
-            # Prevent "wrong image for service" accidents
             if [ "${SERVICE}" = "frontend" ]; then
-              echo "${IMAGE}" | grep -q "/svelteweb:" || { echo "[deploy] Image mismatch for frontend: ${IMAGE}"; exit 1; }
+              echo "${IMAGE}" | grep -q "/svelteweb:"
+              KEY="FRONT_IMAGE"
+              SVC="sveltekit"
             elif [ "${SERVICE}" = "backend" ]; then
-              echo "${IMAGE}" | grep -q "/gameserver:" || { echo "[deploy] Image mismatch for backend: ${IMAGE}"; exit 1; }
+              echo "${IMAGE}" | grep -q "/gameserver:"
+              KEY="BACK_IMAGE"
+              SVC="api"
             else
               echo "[deploy] Unknown service: ${SERVICE}"
               exit 1
             fi
 
-            # Update .env images + deploy
-            if [ "${SERVICE}" = "frontend" ]; then
-              if grep -q '^FRONT_IMAGE=' .env; then
-                sed -i "s|^FRONT_IMAGE=.*|FRONT_IMAGE=${IMAGE}|" .env
-              else
-                echo "FRONT_IMAGE=${IMAGE}" >> .env
-              fi
-
-              docker compose pull sveltekit
-              docker compose up -d --no-deps sveltekit
-
+            echo "[deploy] updating ${KEY} -> ${IMAGE}"
+            if grep -q "^${KEY}=" .env; then
+              sed -i "s|^${KEY}=.*|${KEY}=${IMAGE}|" .env
             else
-              if grep -q '^BACK_IMAGE=' .env; then
-                sed -i "s|^BACK_IMAGE=.*|BACK_IMAGE=${IMAGE}|" .env
-              else
-                echo "BACK_IMAGE=${IMAGE}" >> .env
-              fi
-
-              docker compose pull api
-              docker compose up -d --no-deps api
+              echo "${KEY}=${IMAGE}" >> .env
             fi
 
+            echo "[deploy] docker compose config check"
+            docker compose config >/dev/null
+
+            echo "[deploy] docker compose pull ${SVC}"
+            docker compose pull "${SVC}" || {
+              echo "[deploy] pull failed. showing status/logs..."
+              docker compose ps || true
+              docker compose logs --no-color --tail=200 "${SVC}" || true
+              exit 1
+            }
+
+            echo "[deploy] docker compose up -d --no-deps ${SVC}"
+            docker compose up -d --no-deps "${SVC}" || {
+              echo "[deploy] up failed. showing status/logs..."
+              docker compose ps || true
+              docker compose logs --no-color --tail=200 "${SVC}" || true
+              exit 1
+            }
+
+            echo "[deploy] done. ps:"
             docker compose ps
+
             docker image prune -f || true
