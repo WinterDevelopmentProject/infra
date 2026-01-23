@@ -1,17 +1,16 @@
-name: Deploy (PROD)
+name: Deploy (DEV)
 
 on:
   repository_dispatch:
-    types: [deploy-prod]
+    types: [deploy-dev]
 
 concurrency:
-  group: deploy-game
+  group: deploy-game-dev
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -29,67 +28,62 @@ jobs:
             IMAGE="${{ github.event.client_payload.image }}"
             DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
 
-            echo "[deploy] service=${SERVICE}"
-            echo "[deploy] image=${IMAGE}"
-            echo "[deploy] user=$(whoami) host=$(hostname) home=${HOME}"
+            echo "[deploy-dev] service=${SERVICE}"
+            echo "[deploy-dev] image=${IMAGE}"
+            echo "[deploy-dev] user=$(whoami) host=$(hostname) home=${HOME}"
 
             [ -n "${SERVICE}" ] && [ -n "${IMAGE}" ]
 
             [ -d "${DEPLOY_PATH}" ]
             cd "${DEPLOY_PATH}"
-            echo "[deploy] working_dir=$(pwd)"
+            echo "[deploy-dev] working_dir=$(pwd)"
             ls -la
 
-            echo "[deploy] create front.env"    # temporary
-            cat << 'EOF' > front.env
-            PUBLIC_API_URL=${{ secrets.FRONT_PUBLIC_API_URL }}
-            PUBLIC_WS_URL=${{ secrets.FRONT_PUBLIC_WS_URL }}
-            EOF
-            echo "[deploy] front.env created"
+            export COMPOSE_PROJECT_NAME="game-dev"
+            ENV_FILE=".env.dev"
 
-            export COMPOSE_PROJECT_NAME="game"
-            ENV_FILE=".env"
+            echo "[deploy-dev] using environment file: ${ENV_FILE}"
 
             if [ "${SERVICE}" = "frontend" ]; then
-              echo "${IMAGE}" | grep -q "/svelteweb:"
+              echo "${IMAGE}" | grep -q "/svelteweb-dev:"
               KEY="FRONT_IMAGE"
               SVC="sveltekit"
             elif [ "${SERVICE}" = "backend" ]; then
-              echo "${IMAGE}" | grep -q "/gameserver:"
+              echo "${IMAGE}" | grep -q "/gameserver-dev:"
               KEY="BACK_IMAGE"
               SVC="api"
             else
-              echo "[deploy] Unknown service: ${SERVICE}"
+              echo "[deploy-dev] Unknown service: ${SERVICE}"
               exit 1
             fi
 
-            echo "[deploy] updating ${KEY} -> ${IMAGE}"
+            echo "[deploy-dev] updating ${KEY} -> ${IMAGE}"
             if grep -q "^${KEY}=" "${ENV_FILE}"; then
               sed -i "s|^${KEY}=.*|${KEY}=${IMAGE}|" "${ENV_FILE}"
             else
               echo "${KEY}=${IMAGE}" >> "${ENV_FILE}"
             fi
 
-            echo "[deploy] docker compose config check"
+            echo "[deploy-dev] docker compose config check"
             docker compose --env-file "${ENV_FILE}" config >/dev/null
 
-            echo "[deploy] docker compose pull ${SVC}"
+            echo "[deploy-dev] docker compose pull ${SVC}"
             docker compose --env-file "${ENV_FILE}" pull "${SVC}" || {
-              echo "[deploy] pull failed. showing status/logs..."
+              echo "[deploy-dev] pull failed. showing status/logs..."
               docker compose --env-file "${ENV_FILE}" ps || true
               docker compose --env-file "${ENV_FILE}" logs --no-color --tail=200 "${SVC}" || true
               exit 1
             }
 
-            echo "[deploy] docker compose up -d --no-deps ${SVC}"
+            echo "[deploy-dev] docker compose up -d --no-deps ${SVC}"
             docker compose --env-file "${ENV_FILE}" up -d --no-deps "${SVC}" || {
-              echo "[deploy] up failed. showing status/logs..."
+              echo "[deploy-dev] up failed. showing status/logs..."
               docker compose --env-file "${ENV_FILE}" ps || true
               docker compose --env-file "${ENV_FILE}" logs --no-color --tail=200 "${SVC}" || true
               exit 1
             }
 
-            echo "[deploy] done. ps:"
+            echo "[deploy-dev] done. ps:"
             docker compose --env-file "${ENV_FILE}" ps
 
             docker image prune -f || true
