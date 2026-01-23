@@ -18,6 +18,7 @@ services:
       - traefik.http.routers.game-front-dev.rule=Host(`${DOMAIN}`)
       - traefik.http.routers.game-front-dev.entrypoints=websecure
       - traefik.http.routers.game-front-dev.tls.certresolver=le
+      - traefik.http.routers.game-front-dev.priority=1
       - traefik.http.services.game-front-dev.loadbalancer.server.port=3000
 
   api:
@@ -33,6 +34,8 @@ services:
       - traefik.http.routers.game-api-dev.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
       - traefik.http.routers.game-api-dev.entrypoints=websecure
       - traefik.http.routers.game-api-dev.tls.certresolver=le
+      - traefik.http.routers.game-api-dev.priority=100
+      - traefik.http.routers.game-api-dev.service=game-api-dev
       - traefik.http.middlewares.game-api-dev-strip.stripprefix.prefixes=/api
       - traefik.http.routers.game-api-dev.middlewares=game-api-dev-strip
       - traefik.http.services.game-api-dev.loadbalancer.server.port=3001
@@ -40,4 +43,6 @@ services:
       - traefik.http.routers.game-socket-dev.rule=Host(`${DOMAIN}`) && PathPrefix(`/socket`)
       - traefik.http.routers.game-socket-dev.entrypoints=websecure
       - traefik.http.routers.game-socket-dev.tls.certresolver=le
+      - traefik.http.routers.game-socket-dev.priority=100
+      - traefik.http.routers.game-socket-dev.service=game-socket-dev
       - traefik.http.services.game-socket-dev.loadbalancer.server.port=3001
