@@ -65,25 +65,25 @@ jobs:
             fi
 
             echo "[deploy-dev] docker compose config check"
-            docker compose --env-file "${ENV_FILE}" config >/dev/null
+            docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" config >/dev/null
 
             echo "[deploy-dev] docker compose pull ${SVC}"
-            docker compose --env-file "${ENV_FILE}" pull "${SVC}" || {
+            docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" pull "${SVC}" || {
               echo "[deploy-dev] pull failed. showing status/logs..."
-              docker compose --env-file "${ENV_FILE}" ps || true
-              docker compose --env-file "${ENV_FILE}" logs --no-color --tail=200 "${SVC}" || true
+              docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" ps || true
+              docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" logs --no-color --tail=200 "${SVC}" || true
               exit 1
             }
 
             echo "[deploy-dev] docker compose up -d --no-deps ${SVC}"
-            docker compose --env-file "${ENV_FILE}" up -d --no-deps "${SVC}" || {
+            docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" up -d --no-deps "${SVC}" || {
               echo "[deploy-dev] up failed. showing status/logs..."
-              docker compose --env-file "${ENV_FILE}" ps || true
-              docker compose --env-file "${ENV_FILE}" logs --no-color --tail=200 "${SVC}" || true
+              docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" ps || true
+              docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" logs --no-color --tail=200 "${SVC}" || true
               exit 1
             }
 
             echo "[deploy-dev] done. ps:"
-            docker compose --env-file "${ENV_FILE}" ps
+            docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" ps
 
             docker image prune -f || true

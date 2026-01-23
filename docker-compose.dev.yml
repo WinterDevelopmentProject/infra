@@ -1,0 +1,43 @@
+networks:
+  proxy:
+    external: true
+    name: proxy
+
+services:
+  sveltekit:
+    image: ${FRONT_IMAGE}
+    env_file: front.env
+    restart: unless-stopped
+    networks: [proxy]
+    ports:
+      - "${FRONT_PORT}:3000"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+
+      - traefik.http.routers.game-front.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.game-front.entrypoints=websecure
+      - traefik.http.routers.game-front.tls.certresolver=le
+      - traefik.http.services.game-front.loadbalancer.server.port=3000
+
+  api:
+    image: ${BACK_IMAGE}
+    restart: unless-stopped
+    networks: [proxy]
+    ports:
+      - "${BACK_PORT}:3001"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+
+      - traefik.http.routers.game-api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
+      - traefik.http.routers.game-api.entrypoints=websecure
+      - traefik.http.routers.game-api.tls.certresolver=le
+      - traefik.http.middlewares.game-api-strip.stripprefix.prefixes=/api
+      - traefik.http.routers.game-api.middlewares=game-api-strip
+      - traefik.http.services.game-api.loadbalancer.server.port=3001
+
+      - traefik.http.routers.game-socket.rule=Host(`${DOMAIN}`) && PathPrefix(`/socket`)
+      - traefik.http.routers.game-socket.entrypoints=websecure
+      - traefik.http.routers.game-socket.tls.certresolver=le
+      - traefik.http.services.game-socket.loadbalancer.server.port=3001
