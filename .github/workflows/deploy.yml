@@ -2,7 +2,7 @@ name: Deploy (PROD)
 
 on:
   repository_dispatch:
-    types: [deploy]
+    types: [deploy-prod]
 
 concurrency:
   group: deploy-game

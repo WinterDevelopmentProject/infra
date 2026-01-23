@@ -35,6 +35,7 @@ services:
       - traefik.http.routers.game-api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
       - traefik.http.routers.game-api.entrypoints=websecure
       - traefik.http.routers.game-api.tls.certresolver=le
+      - traefik.http.routers.game-api.service=game-api
       - traefik.http.middlewares.game-api-strip.stripprefix.prefixes=/api
       - traefik.http.routers.game-api.middlewares=game-api-strip
       - traefik.http.services.game-api.loadbalancer.server.port=${BACK_PORT}
@@ -42,4 +43,5 @@ services:
       - traefik.http.routers.game-socket.rule=Host(`${DOMAIN}`) && PathPrefix(`/socket`)
       - traefik.http.routers.game-socket.entrypoints=websecure
       - traefik.http.routers.game-socket.tls.certresolver=le
+      - traefik.http.routers.game-socket.service=game-socket
       - traefik.http.services.game-socket.loadbalancer.server.port=${BACK_PORT}
