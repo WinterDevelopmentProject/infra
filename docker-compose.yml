@@ -8,6 +8,7 @@ networks:
 services:
   sveltekit:
     image: ${FRONT_IMAGE}
+    env_file: front.env
     restart: unless-stopped
     networks: [proxy]
     expose:

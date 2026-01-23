@@ -11,6 +11,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -38,6 +39,13 @@ jobs:
             cd "${DEPLOY_PATH}"
             echo "[deploy] working_dir=$(pwd)"
             ls -la
+
+            echo "[deploy] create front.env"    # temporary
+            cat << 'EOF' > front.env
+            PUBLIC_API_URL=${{ secrets.FRONT_PUBLIC_API_URL }}
+            PUBLIC_WS_URL=${{ secrets.FRONT_PUBLIC_WS_URL }}
+            EOF
+            echo "[deploy] front.env created"
 
             export COMPOSE_PROJECT_NAME="game"
 
