@@ -11,8 +11,8 @@ services:
     env_file: front.env
     restart: unless-stopped
     networks: [proxy]
-    expose:
-      - "${FRONT_PORT}"
+    ports:
+      - "${FRONT_PORT}:${FRONT_PORT}"
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
@@ -26,8 +26,8 @@ services:
     image: ${BACK_IMAGE}
     restart: unless-stopped
     networks: [proxy]
-    expose:
-      - "${BACK_PORT}"
+    ports:
+      - "${BACK_PORT}:${BACK_PORT}"
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
