@@ -4,7 +4,7 @@ networks:
     name: proxy
 
 services:
-  sveltekit-dev:
+  sveltekit:
     image: ${FRONT_IMAGE}
     env_file: front.env
     restart: unless-stopped
@@ -20,7 +20,7 @@ services:
       - traefik.http.routers.game-front-dev.tls.certresolver=le
       - traefik.http.services.game-front-dev.loadbalancer.server.port=3000
 
-  api-dev:
+  api:
     image: ${BACK_IMAGE}
     restart: unless-stopped
     networks: [proxy]
