@@ -1,3 +1,5 @@
+version: "3.9"
+
 networks:
   proxy:
     external: true
@@ -9,29 +11,44 @@ services:
     env_file: front.env
     restart: unless-stopped
     networks: [proxy]
-    ports:
-      - "${FRONT_PORT}:3000"
+
+    expose:
+      - "3000"
+
+    # 필요하면 로컬 디버깅용으로만 주석 해제
+    # ports:
+    #   - "3002:3000"
+
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
 
-      - traefik.http.routers.game-front-dev.rule=Host(`${DOMAIN}`)
+      # ===== FRONT (DEV) =====
+      - traefik.http.routers.game-front-dev.rule=Host(`gamedev.0x51018.com`)
       - traefik.http.routers.game-front-dev.entrypoints=websecure
       - traefik.http.routers.game-front-dev.tls.certresolver=le
       - traefik.http.routers.game-front-dev.priority=1
+      - traefik.http.routers.game-front-dev.service=game-front-dev
       - traefik.http.services.game-front-dev.loadbalancer.server.port=3000
 
   api:
     image: ${BACK_IMAGE}
     restart: unless-stopped
     networks: [proxy]
-    ports:
-      - "${BACK_PORT}:3001"
+
+    expose:
+      - "3001"
+
+    # 필요하면 로컬 디버깅용으로만 주석 해제
+    # ports:
+    #   - "3003:3001"
+
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
 
-      - traefik.http.routers.game-api-dev.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
+      # ===== API (DEV) =====
+      - traefik.http.routers.game-api-dev.rule=Host(`gamedev.0x51018.com`) && PathPrefix(`/api`)
       - traefik.http.routers.game-api-dev.entrypoints=websecure
       - traefik.http.routers.game-api-dev.tls.certresolver=le
       - traefik.http.routers.game-api-dev.priority=100
@@ -40,7 +57,8 @@ services:
       - traefik.http.routers.game-api-dev.middlewares=game-api-dev-strip
       - traefik.http.services.game-api-dev.loadbalancer.server.port=3001
 
-      - traefik.http.routers.game-socket-dev.rule=Host(`${DOMAIN}`) && PathPrefix(`/socket`)
+      # ===== SOCKET (DEV) =====
+      - traefik.http.routers.game-socket-dev.rule=Host(`gamedev.0x51018.com`) && PathPrefix(`/socket`)
       - traefik.http.routers.game-socket-dev.entrypoints=websecure
       - traefik.http.routers.game-socket-dev.tls.certresolver=le
       - traefik.http.routers.game-socket-dev.priority=100
