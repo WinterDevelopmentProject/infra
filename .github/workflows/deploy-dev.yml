@@ -33,17 +33,35 @@ jobs:
             echo "[deploy-dev] user=$(whoami) host=$(hostname) home=${HOME}"
 
             [ -n "${SERVICE}" ] && [ -n "${IMAGE}" ]
-
             [ -d "${DEPLOY_PATH}" ]
+
             cd "${DEPLOY_PATH}"
             echo "[deploy-dev] working_dir=$(pwd)"
             ls -la
+
+            # ----------------------------
+            # 1) (NEW) Ensure docker-compose.dev.yml is the latest from infra repo main
+            #    - DEPLOY_PATH must be a git clone of infra repo
+            # ----------------------------
+            if [ -d ".git" ]; then
+              echo "[deploy-dev] updating infra repo (git pull)"
+              git remote -v || true
+              git fetch --all --prune
+              git reset --hard origin/main
+              git clean -fd
+            else
+              echo "[deploy-dev] WARN: ${DEPLOY_PATH} is not a git repo (.git missing). compose will NOT be updated."
+              echo "[deploy-dev]       If you want compose auto-update, DEPLOY_PATH must be a clone of the infra repo."
+            fi
 
             export COMPOSE_PROJECT_NAME="game-dev"
             ENV_FILE=".env.dev"
 
             echo "[deploy-dev] using environment file: ${ENV_FILE}"
 
+            # ----------------------------
+            # 2) Determine which service to update
+            # ----------------------------
             if [ "${SERVICE}" = "frontend" ]; then
               echo "${IMAGE}" | grep -q "/svelteweb-dev:"
               KEY="FRONT_IMAGE"
@@ -57,6 +75,9 @@ jobs:
               exit 1
             fi
 
+            # ----------------------------
+            # 3) Update .env.dev image tag
+            # ----------------------------
             echo "[deploy-dev] updating ${KEY} -> ${IMAGE}"
             if grep -q "^${KEY}=" "${ENV_FILE}"; then
               sed -i "s|^${KEY}=.*|${KEY}=${IMAGE}|" "${ENV_FILE}"
@@ -64,9 +85,18 @@ jobs:
               echo "${KEY}=${IMAGE}" >> "${ENV_FILE}"
             fi
 
+            # ----------------------------
+            # 4) Validate docker compose config and show effective traefik labels quick check
+            # ----------------------------
             echo "[deploy-dev] docker compose config check"
             docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" config >/dev/null
 
+            echo "[deploy-dev] sanity: show relevant traefik labels (resolved)"
+            docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" config | sed -n '/services:/,$p' | egrep -n "traefik\.http\.routers\.game-(api|socket|front)-dev\.|loadbalancer\.server\.port|stripprefix" || true
+
+            # ----------------------------
+            # 5) Pull & recreate ONLY the target service (no deps)
+            # ----------------------------
             echo "[deploy-dev] docker compose pull ${SVC}"
             docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" pull "${SVC}" || {
               echo "[deploy-dev] pull failed. showing status/logs..."
@@ -75,8 +105,8 @@ jobs:
               exit 1
             }
 
-            echo "[deploy-dev] docker compose up -d --no-deps ${SVC}"
-            docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" up -d --no-deps "${SVC}" || {
+            echo "[deploy-dev] docker compose up -d --no-deps --force-recreate ${SVC}"
+            docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" up -d --no-deps --force-recreate "${SVC}" || {
               echo "[deploy-dev] up failed. showing status/logs..."
               docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" ps || true
               docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" logs --no-color --tail=200 "${SVC}" || true
@@ -85,5 +115,13 @@ jobs:
 
             echo "[deploy-dev] done. ps:"
             docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" ps
+
+            echo "[deploy-dev] post-check: networks"
+            docker inspect traefik --format 'traefik networks={{json .NetworkSettings.Networks}}' || true
+            docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" ps -q sveltekit | xargs -r docker inspect --format 'sveltekit networks={{json .NetworkSettings.Networks}}' || true
+            docker compose -f docker-compose.dev.yml --env-file "${ENV_FILE}" ps -q api | xargs -r docker inspect --format 'api networks={{json .NetworkSettings.Networks}}' || true
+
+            echo "[deploy-dev] post-check: curl /api/health (expect backend)"
+            curl -sk -o /dev/null -w "status=%{http_code}\n" "https://gamedev.0x51018.com/api/health" || true
 
             docker image prune -f || true
