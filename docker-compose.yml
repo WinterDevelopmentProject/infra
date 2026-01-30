@@ -11,37 +11,57 @@ services:
     env_file: front.env
     restart: unless-stopped
     networks: [proxy]
-    ports:
-      - "${FRONT_PORT}:${FRONT_PORT}"
+
+    # Traefik 통해서만 접근할 거면 expose만이면 충분합니다.
+    expose:
+      - "3000"
+
+    # 필요하면 로컬 디버깅용으로만 주석 해제
+    # ports:
+    #   - "3000:3000"
+
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
 
-      - traefik.http.routers.game-front.rule=Host(`${DOMAIN}`)
+      # ===== FRONT (PROD) =====
+      - traefik.http.routers.game-front.rule=Host(`game.0x51018.com`)
       - traefik.http.routers.game-front.entrypoints=websecure
       - traefik.http.routers.game-front.tls.certresolver=le
-      - traefik.http.services.game-front.loadbalancer.server.port=${FRONT_PORT}
+      - traefik.http.routers.game-front.priority=1
+      - traefik.http.routers.game-front.service=game-front
+      - traefik.http.services.game-front.loadbalancer.server.port=3000
 
   api:
     image: ${BACK_IMAGE}
     restart: unless-stopped
     networks: [proxy]
-    ports:
-      - "${BACK_PORT}:${BACK_PORT}"
+
+    expose:
+      - "3001"
+
+    # 필요하면 로컬 디버깅용으로만 주석 해제
+    # ports:
+    #   - "3001:3001"
+
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
 
-      - traefik.http.routers.game-api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
+      # ===== API (PROD) =====
+      - traefik.http.routers.game-api.rule=Host(`game.0x51018.com`) && PathPrefix(`/api`)
       - traefik.http.routers.game-api.entrypoints=websecure
       - traefik.http.routers.game-api.tls.certresolver=le
+      - traefik.http.routers.game-api.priority=100
       - traefik.http.routers.game-api.service=game-api
       - traefik.http.middlewares.game-api-strip.stripprefix.prefixes=/api
       - traefik.http.routers.game-api.middlewares=game-api-strip
-      - traefik.http.services.game-api.loadbalancer.server.port=${BACK_PORT}
+      - traefik.http.services.game-api.loadbalancer.server.port=3001
 
-      - traefik.http.routers.game-socket.rule=Host(`${DOMAIN}`) && PathPrefix(`/socket`)
+      # ===== SOCKET (PROD) =====
+      - traefik.http.routers.game-socket.rule=Host(`game.0x51018.com`) && PathPrefix(`/socket`)
       - traefik.http.routers.game-socket.entrypoints=websecure
       - traefik.http.routers.game-socket.tls.certresolver=le
+      - traefik.http.routers.game-socket.priority=100
       - traefik.http.routers.game-socket.service=game-socket
-      - traefik.http.services.game-socket.loadbalancer.server.port=${BACK_PORT}
+      - traefik.http.services.game-socket.loadbalancer.server.port=3001
